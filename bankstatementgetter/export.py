@@ -1,15 +1,14 @@
-import getpass
-import time
 from selenium import webdriver
 from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import TimeoutException
-from selenium.webdriver.common.action_chains import ActionChains 
+import getpass
+import time
+import datetime
 
 import bankstatementgetter.downloads as downloads 
-import bankstatementgetter.export as export 
 import bankstatementgetter.cookies as cookies 
 
 
@@ -17,8 +16,9 @@ import bankstatementgetter.cookies as cookies
 class BankStatementGetter():
     """Class to manage downloading bank statements."""
 
-    def __init__(self):
+    def __init__(self, verbose = True):
 
+        self.verbose = verbose
         self.profile = self.set_profile()
         self.login_page = 'https://www.halifax-online.co.uk/personal/logon/login.jsp'
         self.webdriver_executable_path = '/usr/local/bin/geckodriver'
@@ -40,7 +40,7 @@ class BankStatementGetter():
 
         self.enter_memorable_characters()
 
-        time.sleep(2)
+        self.sleep(2)
 
         self.enter_passcode()
     
@@ -62,7 +62,6 @@ class BankStatementGetter():
 
         self.sign_out()
 
-
     def set_profile(self):
         """Set profile for webdriver to avoid download popup boxes for CSV files."""
 
@@ -72,8 +71,23 @@ class BankStatementGetter():
 
         return profile
 
+    def print_message(self, msg):
+        """Print message if verbose attribute is True."""
+
+        if self.verbose:
+            print(datetime.datetime.now(), msg)       
+
+    def sleep(self, s):
+        """Sleep for s seconds."""
+
+        self.print_message(f'sleeping for {s}s')
+
+        time.sleep(s)
+
     def start_webdriver(self):
         """Start firefox driver and send to login page."""
+
+        self.print_message('starting webdriver')
 
         driver = webdriver.Firefox(executable_path = self.webdriver_executable_path, firefox_profile = self.profile)
         driver.get(self.login_page)
@@ -86,16 +100,22 @@ class BankStatementGetter():
         Seems to prevent looping back to first login screen after entering memorable info characters.
         """
 
+        self.print_message('adding cookies to browser')
+
         cookies.load_and_add_cookies(self.driver, 'cookies/cookies.json', '.halifax-online.co.uk')
 
     def refresh_page(self):
         """Refresh webpage."""
+
+        self.print_message('refreshing page')
 
         self.driver.refresh()
 
     def enter_login_details(self):
         """Enter username and password on login page and submit."""
     
+        self.print_message('accepting login details')
+
         username = getpass.getpass('username > ')
         pwd = getpass.getpass('password > ')
 
@@ -121,6 +141,8 @@ class BankStatementGetter():
 
         """
         
+        self.print_message(f'wating for {timeout}s for {timeout_msg} (xpath: {xpath_str})')
+
         timeout_msg = f'timeout waiting for {timeout_msg} - after {timeout}s, xpath: {xpath_str}'
 
         try:
@@ -135,6 +157,8 @@ class BankStatementGetter():
 
     def enter_memorable_characters(self):
         """Input memorable characters and proceed to next page."""
+
+        self.print_message('accepting memorable information')
 
         # loop through 3 memorbale characters
         for i in range(1, 4):
@@ -159,6 +183,8 @@ class BankStatementGetter():
     def enter_passcode(self):
         """Enter passcode sent by text message."""
 
+        self.print_message('accepting passcode')
+
         page_title_elements = self.driver.find_elements_by_class_name("page-title")
 
         # if we are being asked to verify with a passcode text
@@ -166,10 +192,6 @@ class BankStatementGetter():
             
             # click on continue button to send text
             self.driver.find_elements_by_class_name("base-button")[1].click()
-
-            # usual click()
-            # action = ActionChains(driver) 
-            # action.move_to_element(continue_button).click().perform() 
 
             # accept passcode
             passcode = getpass.getpass('passcode > ')
@@ -183,10 +205,14 @@ class BankStatementGetter():
     def move_to_accounts(self):
         """Click on the view statement button for the first account"""
 
+        self.print_message('moving to accounts page')
+
         self.driver.find_element_by_xpath('//*[@id="lnkAccFuncs_viewStatement_des-m-sat-xx-1"]').click()
 
     def download_statement(self):
         """Choose to download CSV, enter date range and download."""
+
+        self.print_message('downloading statement')
 
         # click on the dropdown to export statements
         self.driver.find_element_by_xpath('//*[@id="top-bar-exports"]').click()
@@ -213,14 +239,14 @@ class BankStatementGetter():
             timeout_msg = 'export button'
         )
         
-        time.sleep(1)
+        self.sleep(1)
         
         # select csv export option from drop down
         export_format_dropdown = self.driver.find_element_by_xpath('//*[@name="exportFormat"]')
         export_format_dropdown.click()
         export_format_dropdown.send_keys('Internet banking text/spreadsheet (.CSV)')
 
-        time.sleep(1)
+        self.sleep(1)
         
         # click the export button
         self.driver.find_element_by_xpath('//*[@id="exportStatementsButton"]').click()
@@ -230,6 +256,8 @@ class BankStatementGetter():
 
     def sign_out(self):
         """Click log out button."""
+
+        self.print_message('signing out')
 
         self.driver.find_element_by_xpath('//*[@id="ifCommercial:ifCustomerBar:ifMobLO:outputLinkLogOut"]').click()
 
