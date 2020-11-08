@@ -1,16 +1,15 @@
 import bankstatementgetter.export as export
 
 
-def test():
+def run_exporter():
     
-    halifax_statement_file = export.export_halifax_statements()
+    exporter = export.BankStatementGetter()
+    exporter.run()
     
-    print(halifax_statement_file)
-
     
     
     
 if __name__ == '__main__':
     
-    test()
+    run_exporter()
     

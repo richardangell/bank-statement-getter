@@ -14,190 +14,224 @@ import bankstatementgetter.cookies as cookies
 
 
 
-def wait_for_xpath(driver, xpath_str, timeout = 5, timeout_msg = 'Timed out waiting for page to load'):
-    """
-    Export bank statements from Halifax.
-    
-    Args:
-        driver (webdriver.firefox.webdriver.WebDriver): selenium firefox web driver
-        xpath_str (str): xpath string to look for.
-        timeout (int): number of seconds to wait for page to load. Default value is 5.
-        timeout_msg (str): timeoutException message is display if xpath is not found within timeout seconds.
+class BankStatementGetter():
+    """Class to manage downloading bank statements."""
 
-    Returns:
-        None.
-    """
+    def __init__(self):
+
+        self.profile = self.set_profile()
+        self.login_page = 'https://www.halifax-online.co.uk/personal/logon/login.jsp'
+        self.webdriver_executable_path = '/usr/local/bin/geckodriver'
+        self.start_date_range = '20/02/2020'
+        self.end_date_range = '22/02/2020'
+
+    def run(self):
+
+        self.start_webdriver()
+        self.add_cookies_to_browser()
+        self.refresh_page()
+        self.enter_login_details()
+
+        # wait to get to next page - memorable information
+        self.wait_for_xpath(
+            xpath_str = '//*[@for="frmentermemorableinformation1:strEnterMemorableInformation_memInfo1"]',
+            timeout_msg = 'memorable information'
+        )
+
+        self.enter_memorable_characters()
+
+        time.sleep(2)
+
+        self.enter_passcode()
     
-    if not isinstance(driver, webdriver.firefox.webdriver.WebDriver):
+        # wait to get to next page - accounts
+        self.wait_for_xpath(
+            xpath_str = '//*[@id="lnkAccFuncs_viewStatement_des-m-sat-xx-1"]',
+            timeout_msg = 'accounts'
+        )
+
+        self.move_to_accounts()
+
+        # wait to get to next page - statement
+        self.wait_for_xpath(
+            xpath_str = '//*[@id="top-bar-exports"]',
+            timeout_msg = 'statement'
+        )
+
+        self.download_statement()
+
+        self.sign_out()
+
+
+    def set_profile(self):
+        """Set profile for webdriver to avoid download popup boxes for CSV files."""
+
+        profile = webdriver.FirefoxProfile()
+        profile.set_preference("browser.helperApps.neverAsk.openFile", "application/msexcel, text/csv application/csv")
+        profile.set_preference("browser.helperApps.neverAsk.saveToDisk", "application/msexcel, text/csv application/csv")
+
+        return profile
+
+    def start_webdriver(self):
+        """Start firefox driver and send to login page."""
+
+        driver = webdriver.Firefox(executable_path = self.webdriver_executable_path, firefox_profile = self.profile)
+        driver.get(self.login_page)
+
+        self.driver = driver
+
+    def add_cookies_to_browser(self):
+        """Add cookies to selenium session.
         
-        raise TypeError('driver should be a selenium firefox driver')
+        Seems to prevent looping back to first login screen after entering memorable info characters.
+        """
+
+        cookies.load_and_add_cookies(self.driver, 'cookies/cookies.json', '.halifax-online.co.uk')
+
+    def refresh_page(self):
+        """Refresh webpage."""
+
+        self.driver.refresh()
+
+    def enter_login_details(self):
+        """Enter username and password on login page and submit."""
     
-    try:
+        username = getpass.getpass('username > ')
+        pwd = getpass.getpass('password > ')
+
+        # get username and password boxes
+        username_box = self.driver.find_element_by_xpath('//*[@id="frmLogin:strCustomerLogin_userID"]')
+        password_box = self.driver.find_element_by_xpath('//*[@id="frmLogin:strCustomerLogin_pwd"]')
+
+        # input login details and submit
+        username_box.send_keys(username)
+        password_box.send_keys(pwd)
+        password_box.submit()
         
-        element_present = expected_conditions.presence_of_element_located((By.XPATH, xpath_str))
+    def wait_for_xpath(self, xpath_str, timeout_msg, timeout = 5):
+        """Method to wait for xpath to be available on page.
         
-        WebDriverWait(driver, timeout).until(element_present)
+        Args:
+            xpath_str (str): xpath string to look for.
+            timeout (int): number of seconds to wait for page to load. Default value is 5.
+            timeout_msg (str): timeoutException message is display if xpath is not found within timeout seconds.
+
+        Returns:
+            None.
+
+        """
         
-    except TimeoutException:
+        timeout_msg = f'timeout waiting for {timeout_msg} - after {timeout}s, xpath: {xpath_str}'
+
+        try:
+            
+            element_present = expected_conditions.presence_of_element_located((By.XPATH, xpath_str))
+            
+            WebDriverWait(self.driver, timeout).until(element_present)
+            
+        except TimeoutException as err:
+            
+            raise TimeoutError(timeout_msg) from err
+
+    def enter_memorable_characters(self):
+        """Input memorable characters and proceed to next page."""
+
+        # loop through 3 memorbale characters
+        for i in range(1, 4):
+            
+            # get text identifying which character is required
+            character_index = self.driver.find_element_by_xpath(
+                f'//*[@for="frmentermemorableinformation1:strEnterMemorableInformation_memInfo{i}"]'
+            ).text.rstrip()
+
+            # input character
+            character = getpass.getpass(character_index + ' > ')
+
+            # get drop down box 
+            drop_down = self.driver.find_element_by_xpath(f'//*[@id="frmentermemorableinformation1:strEnterMemorableInformation_memInfo{i}"]')
+
+            # input the required character into drop down box
+            drop_down.send_keys(character)
+
+        # click on continue after memorable info characters have been input to log in
+        self.driver.find_element_by_xpath('//*[@id="frmentermemorableinformation1:btnContinue"]').click()
+
+    def enter_passcode(self):
+        """Enter passcode sent by text message."""
+
+        page_title_elements = self.driver.find_elements_by_class_name("page-title")
+
+        # if we are being asked to verify with a passcode text
+        if len(page_title_elements) == 1 and page_title_elements[0].text == 'VERIFY YOURSELF WITH A PASSCODE.':
+            
+            # click on continue button to send text
+            self.driver.find_elements_by_class_name("base-button")[1].click()
+
+            # usual click()
+            # action = ActionChains(driver) 
+            # action.move_to_element(continue_button).click().perform() 
+
+            # accept passcode
+            passcode = getpass.getpass('passcode > ')
+
+            # populate passcode box
+            self.driver.find_elements_by_class_name("base-input")[0].send_keys(passcode)
+
+            # click on continue button
+            self.driver.find_elements_by_class_name("base-button")[0].click()
+
+    def move_to_accounts(self):
+        """Click on the view statement button for the first account"""
+
+        self.driver.find_element_by_xpath('//*[@id="lnkAccFuncs_viewStatement_des-m-sat-xx-1"]').click()
+
+    def download_statement(self):
+        """Choose to download CSV, enter date range and download."""
+
+        # click on the dropdown to export statements
+        self.driver.find_element_by_xpath('//*[@id="top-bar-exports"]').click()
+
+        # click on the option to export to csv
+        self.driver.find_element_by_xpath('//*[@aria-label="Export transactions (CSV, QIF). option 3 of 4"]').click()
         
-        print(timeout_msg)
-    
-    
+        # click on export date range
+        self.driver.find_element_by_xpath('//*[@id="labelexportDateRangeRadio-1"]').click()
 
+        # input export from date
+        date_from_box = self.driver.find_element_by_xpath('//*[@aria-label="Enter from date"]')
+        date_from_box.click()
+        date_from_box.send_keys(self.start_date_range)
 
-def export_halifax_statements(timeout = 5, download_timeout = 10):
-    """
-    Export bank statements from Halifax.
-    
-    Args:
-        timeout (int): number of seconds to wait for pages to load.
-        download_timeout (int): number of seconds to wait for statements to download.
+        # input export to date
+        date_to_box = self.driver.find_element_by_xpath('//*[@aria-label="Enter to date"]')
+        date_to_box.click()
+        date_to_box.send_keys(self.end_date_range)
 
-    Returns:
-        str: The filename and path of the exported statements.
-    """
-
-    profile = webdriver.FirefoxProfile()
-    profile.set_preference("browser.helperApps.neverAsk.openFile", "application/msexcel, text/csv application/csv")
-    profile.set_preference("browser.helperApps.neverAsk.saveToDisk", "application/msexcel, text/csv application/csv")
-
-    # get firefox driver and send to halifax login page
-    driver = webdriver.Firefox(executable_path = '/usr/local/bin/geckodriver', firefox_profile = profile)
-    driver.get('https://www.halifax-online.co.uk/personal/logon/login.jsp')
-
-    cookies.load_and_add_cookies(driver, 'cookies/cookies.json', '.halifax-online.co.uk')
-
-    driver.refresh()
-
-    # get username and password
-    hali_user = getpass.getpass('username > ')
-    hali_pass = getpass.getpass('password > ')
-
-    # get username and password boxes
-    username_box = driver.find_element_by_xpath('//*[@id="frmLogin:strCustomerLogin_userID"]')
-    password_box = driver.find_element_by_xpath('//*[@id="frmLogin:strCustomerLogin_pwd"]')
-
-    # input username and password and submit
-    username_box.send_keys(hali_user)
-    password_box.send_keys(hali_pass)
-    password_box.submit()
-
-    # check if details were invalid id="useridInvalidError" 
-    
-    # wait to get to next page (memorable information)
-    wait_for_xpath(driver,
-                   xpath_str = '//*[@for="frmentermemorableinformation1:strEnterMemorableInformation_memInfo1"]', 
-                   timeout_msg = 'Timed out waiting for memorable info page to load')
-    
-    # cookies.load_and_add_cookies(driver, 'cookies/cookies3.json', '.secure.halifax-online.co.uk')
-
-    # get the memorable character indexes required for sign in 
-    mem_char_idx1 = driver.find_element_by_xpath('//*[@for="frmentermemorableinformation1:strEnterMemorableInformation_memInfo1"]').text.rstrip()
-    mem_char_idx2 = driver.find_element_by_xpath('//*[@for="frmentermemorableinformation1:strEnterMemorableInformation_memInfo2"]').text.rstrip()
-    mem_char_idx3 = driver.find_element_by_xpath('//*[@for="frmentermemorableinformation1:strEnterMemorableInformation_memInfo3"]').text.rstrip()
-
-    # input required characters from memorable info
-    mem_chars = [getpass.getpass(c + ' > ') for c in [mem_char_idx1, mem_char_idx2, mem_char_idx3]]
-
-    # get the selection drop downs for memorable info characters
-    mem_char1 = driver.find_element_by_xpath('//*[@id="frmentermemorableinformation1:strEnterMemorableInformation_memInfo1"]')
-    mem_char2 = driver.find_element_by_xpath('//*[@id="frmentermemorableinformation1:strEnterMemorableInformation_memInfo2"]')
-    mem_char3 = driver.find_element_by_xpath('//*[@id="frmentermemorableinformation1:strEnterMemorableInformation_memInfo3"]')
-
-    # input the required characters
-    mem_char1.send_keys(mem_chars[0])
-    mem_char2.send_keys(mem_chars[1])
-    mem_char3.send_keys(mem_chars[2])
-
-    # click on continue after memorable info characters have been input to log in
-    driver.find_element_by_xpath('//*[@id="frmentermemorableinformation1:btnContinue"]').click()
-    
-    time.sleep(5)
-
-    page_title_elements = driver.find_elements_by_class_name("page-title")
-
-    # passcode text
-    if len(page_title_elements) == 1 and page_title_elements[0].text == 'VERIFY YOURSELF WITH A PASSCODE.':
-
-        continue_button = driver.find_elements_by_class_name("base-button")[1]
-
-        # create action chain object 
-        action = ActionChains(driver) 
+        # wait to get export button
+        self.wait_for_xpath(
+            xpath_str = '//*[@name="exportFormat"]', 
+            timeout_msg = 'export button'
+        )
         
-        # perform the operation 
-        action.move_to_element(continue_button).click().perform() 
+        time.sleep(1)
+        
+        # select csv export option from drop down
+        export_format_dropdown = self.driver.find_element_by_xpath('//*[@name="exportFormat"]')
+        export_format_dropdown.click()
+        export_format_dropdown.send_keys('Internet banking text/spreadsheet (.CSV)')
 
-        passcode = getpass.getpass('passcode > ')
+        time.sleep(1)
+        
+        # click the export button
+        self.driver.find_element_by_xpath('//*[@id="exportStatementsButton"]').click()
 
-        driver.find_elements_by_class_name("base-input")[0].send_keys(passcode)
+        # close the export window
+        self.driver.find_element_by_xpath('//*[@id="modal-close"]').click()
 
-        driver.find_elements_by_class_name("base-button")[0].click()
+    def sign_out(self):
+        """Click log out button."""
 
-    # check login successful
-    
-    # wait to get to next page (accounts)
-    wait_for_xpath(driver,
-                   xpath_str = '//*[@id="lnkAccFuncs_viewStatement_des-m-sat-xx-1"]', 
-                   timeout_msg = 'Timed out waiting for accounts page to load')
-    
-    # click on the view statement button for the first account
-    driver.find_element_by_xpath('//*[@id="lnkAccFuncs_viewStatement_des-m-sat-xx-1"]').click()
-
-    # wait to get to next page (statement)
-    wait_for_xpath(driver,
-                   xpath_str = '//*[@id="top-bar-exports"]', 
-                   timeout_msg = 'Timed out waiting for accounts page to load')
-    
-    # click on the dropdown to export statements
-    driver.find_element_by_xpath('//*[@id="top-bar-exports"]').click()
-
-    # click on the option to export to csv
-    driver.find_element_by_xpath('//*[@aria-label="Export transactions (CSV, QIF). option 3 of 4"]').click()
-    
-    # click on export date range
-    driver.find_element_by_xpath('//*[@id="labelexportDateRangeRadio-1"]').click()
-
-    # input export from date
-    date_from_box = driver.find_element_by_xpath('//*[@aria-label="Enter from date"]')
-    date_from_box.click()
-    date_from_box.send_keys('20/02/2020')
-
-    # input export to date
-    date_to_box = driver.find_element_by_xpath('//*[@aria-label="Enter to date"]')
-    date_to_box.click()
-    date_to_box.send_keys('22/02/2020')
-
-    # wait to get export button
-    wait_for_xpath(driver,
-                   xpath_str = '//*[@name="exportFormat"]', 
-                   timeout_msg = 'Timed out waiting for export button')
-    
-    time.sleep(1)
-    
-    # select csv export option from drop down
-    export_format_dropdown = driver.find_element_by_xpath('//*[@name="exportFormat"]')
-    export_format_dropdown.click()
-    export_format_dropdown.send_keys('Internet banking text/spreadsheet (.CSV)')
-
-    time.sleep(1)
-    
-    # get the files in the download folder
-    # current_downloads = downloads.get_downloads()
-    
-    # click the export button
-    driver.find_element_by_xpath('//*[@id="exportStatementsButton"]').click()
-
-    # get the downloaded file
-    # downloaded_statement_file = downloads.get_new_download(current_downloads)
-    
-    # close the export window
-    driver.find_element_by_xpath('//*[@id="modal-close"]').click()
-
-    # log out of halifax
-    driver.find_element_by_xpath('//*[@id="ifCommercial:ifCustomerBar:ifMobLO:outputLinkLogOut"]').click()
-
-    return None
-    
+        self.driver.find_element_by_xpath('//*[@id="ifCommercial:ifCustomerBar:ifMobLO:outputLinkLogOut"]').click()
 
 
 
