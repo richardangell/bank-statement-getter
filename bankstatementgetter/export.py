@@ -1,13 +1,16 @@
-import downloads # from bank-statement-getter
 import getpass
 import time
 from selenium import webdriver
-from selenium.webdriver.common.keys import Keys
-from selenium.common.exceptions import TimeoutException
+from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
+from selenium.common.exceptions import TimeoutException
+from selenium.webdriver.common.action_chains import ActionChains 
 
+import bankstatementgetter.downloads as downloads 
+import bankstatementgetter.export as export 
+import bankstatementgetter.cookies as cookies 
 
 
 
@@ -31,7 +34,7 @@ def wait_for_xpath(driver, xpath_str, timeout = 5, timeout_msg = 'Timed out wait
     
     try:
         
-        element_present = EC.presence_of_element_located((By.XPATH, xpath_str))
+        element_present = expected_conditions.presence_of_element_located((By.XPATH, xpath_str))
         
         WebDriverWait(driver, timeout).until(element_present)
         
@@ -54,14 +57,18 @@ def export_halifax_statements(timeout = 5, download_timeout = 10):
         str: The filename and path of the exported statements.
     """
 
+    profile = webdriver.FirefoxProfile()
+    profile.set_preference("browser.helperApps.neverAsk.openFile", "application/msexcel, text/csv application/csv")
+    profile.set_preference("browser.helperApps.neverAsk.saveToDisk", "application/msexcel, text/csv application/csv")
+
     # get firefox driver and send to halifax login page
-    driver = webdriver.Firefox(executable_path = '/usr/local/bin/geckodriver')
+    driver = webdriver.Firefox(executable_path = '/usr/local/bin/geckodriver', firefox_profile = profile)
     driver.get('https://www.halifax-online.co.uk/personal/logon/login.jsp')
 
-    profile = webdriver.FirefoxProfile()
-    profile.set_preference("browser.helperApps.neverAsk.openFile", "application/msexcel, text/csv")
-    profile.set_preference("browser.helperApps.neverAsk.saveToDisk", "application/msexcel, text/csv")
-    
+    cookies.load_and_add_cookies(driver, 'cookies/cookies.json', '.halifax-online.co.uk')
+
+    driver.refresh()
+
     # get username and password
     hali_user = getpass.getpass('username > ')
     hali_pass = getpass.getpass('password > ')
@@ -82,6 +89,8 @@ def export_halifax_statements(timeout = 5, download_timeout = 10):
                    xpath_str = '//*[@for="frmentermemorableinformation1:strEnterMemorableInformation_memInfo1"]', 
                    timeout_msg = 'Timed out waiting for memorable info page to load')
     
+    # cookies.load_and_add_cookies(driver, 'cookies/cookies3.json', '.secure.halifax-online.co.uk')
+
     # get the memorable character indexes required for sign in 
     mem_char_idx1 = driver.find_element_by_xpath('//*[@for="frmentermemorableinformation1:strEnterMemorableInformation_memInfo1"]').text.rstrip()
     mem_char_idx2 = driver.find_element_by_xpath('//*[@for="frmentermemorableinformation1:strEnterMemorableInformation_memInfo2"]').text.rstrip()
@@ -103,6 +112,27 @@ def export_halifax_statements(timeout = 5, download_timeout = 10):
     # click on continue after memorable info characters have been input to log in
     driver.find_element_by_xpath('//*[@id="frmentermemorableinformation1:btnContinue"]').click()
     
+    time.sleep(5)
+
+    page_title_elements = driver.find_elements_by_class_name("page-title")
+
+    # passcode text
+    if len(page_title_elements) == 1 and page_title_elements[0].text == 'VERIFY YOURSELF WITH A PASSCODE.':
+
+        continue_button = driver.find_elements_by_class_name("base-button")[1]
+
+        # create action chain object 
+        action = ActionChains(driver) 
+        
+        # perform the operation 
+        action.move_to_element(continue_button).click().perform() 
+
+        passcode = getpass.getpass('passcode > ')
+
+        driver.find_elements_by_class_name("base-input")[0].send_keys(passcode)
+
+        driver.find_elements_by_class_name("base-button")[0].click()
+
     # check login successful
     
     # wait to get to next page (accounts)
@@ -122,7 +152,7 @@ def export_halifax_statements(timeout = 5, download_timeout = 10):
     driver.find_element_by_xpath('//*[@id="top-bar-exports"]').click()
 
     # click on the option to export to csv
-    driver.find_element_by_xpath('//*[@aria-label="Export transactions (CSV, QIF). option 2 of 3"]').click()
+    driver.find_element_by_xpath('//*[@aria-label="Export transactions (CSV, QIF). option 3 of 4"]').click()
     
     # click on export date range
     driver.find_element_by_xpath('//*[@id="labelexportDateRangeRadio-1"]').click()
@@ -130,12 +160,12 @@ def export_halifax_statements(timeout = 5, download_timeout = 10):
     # input export from date
     date_from_box = driver.find_element_by_xpath('//*[@aria-label="Enter from date"]')
     date_from_box.click()
-    date_from_box.send_keys('20/02/2018')
+    date_from_box.send_keys('20/02/2020')
 
     # input export to date
     date_to_box = driver.find_element_by_xpath('//*[@aria-label="Enter to date"]')
     date_to_box.click()
-    date_to_box.send_keys('22/02/2018')
+    date_to_box.send_keys('22/02/2020')
 
     # wait to get export button
     wait_for_xpath(driver,
@@ -152,13 +182,13 @@ def export_halifax_statements(timeout = 5, download_timeout = 10):
     time.sleep(1)
     
     # get the files in the download folder
-    current_downloads = downloads.get_downloads()
+    # current_downloads = downloads.get_downloads()
     
     # click the export button
     driver.find_element_by_xpath('//*[@id="exportStatementsButton"]').click()
 
     # get the downloaded file
-    downloaded_statement_file = downloads.get_new_download(current_downloads)
+    # downloaded_statement_file = downloads.get_new_download(current_downloads)
     
     # close the export window
     driver.find_element_by_xpath('//*[@id="modal-close"]').click()
@@ -166,7 +196,7 @@ def export_halifax_statements(timeout = 5, download_timeout = 10):
     # log out of halifax
     driver.find_element_by_xpath('//*[@id="ifCommercial:ifCustomerBar:ifMobLO:outputLinkLogOut"]').click()
 
-    return(downloaded_statement_file)
+    return None
     
 
 

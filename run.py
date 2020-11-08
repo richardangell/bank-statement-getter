@@ -1,4 +1,4 @@
-import export
+import bankstatementgetter.export as export
 
 
 def test():
