@@ -16,16 +16,18 @@ import bankstatementgetter.cookies as cookies
 class BankStatementGetter():
     """Class to manage downloading bank statements."""
 
-    def __init__(self, verbose = True):
+    def __init__(self, start_date, end_date, verbose = True):
 
         self.verbose = verbose
         self.profile = self.set_profile()
         self.login_page = 'https://www.halifax-online.co.uk/personal/logon/login.jsp'
         self.webdriver_executable_path = '/usr/local/bin/geckodriver'
-        self.start_date_range = '20/02/2020'
-        self.end_date_range = '22/02/2020'
+        self.start_date_range = start_date
+        self.end_date_range = end_date
 
     def run(self):
+
+        self.print_message(f'running for date range {self.start_date_range} - {self.end_date_range}')
 
         self.start_webdriver()
         self.add_cookies_to_browser()
