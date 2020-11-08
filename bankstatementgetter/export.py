@@ -7,6 +7,7 @@ from selenium.common.exceptions import TimeoutException
 import getpass
 import time
 import datetime
+from pathlib import Path
 
 import bankstatementgetter.downloads as downloads 
 import bankstatementgetter.cookies as cookies 
@@ -19,12 +20,13 @@ class BankStatementGetter():
     def __init__(self, start_date, end_date, verbose = True):
 
         self.verbose = verbose
+        self.download_dir = str(Path.home() / "Downloads")
         self.profile = self.set_profile()
         self.login_page = 'https://www.halifax-online.co.uk/personal/logon/login.jsp'
         self.webdriver_executable_path = '/usr/local/bin/geckodriver'
         self.start_date_range = start_date
         self.end_date_range = end_date
-
+        
     def run(self):
 
         self.print_message(f'running for date range {self.start_date_range} - {self.end_date_range}')
@@ -64,12 +66,15 @@ class BankStatementGetter():
 
         self.sign_out()
 
+        self.downloaded_file = self.get_downloaded_file()
+
     def set_profile(self):
         """Set profile for webdriver to avoid download popup boxes for CSV files."""
 
         profile = webdriver.FirefoxProfile()
         profile.set_preference("browser.helperApps.neverAsk.openFile", "application/msexcel, text/csv application/csv")
         profile.set_preference("browser.helperApps.neverAsk.saveToDisk", "application/msexcel, text/csv application/csv")
+        profile.set_preference("browser.download.dir", self.download_dir)
 
         return profile
 
@@ -263,7 +268,12 @@ class BankStatementGetter():
 
         self.driver.find_element_by_xpath('//*[@id="ifCommercial:ifCustomerBar:ifMobLO:outputLinkLogOut"]').click()
 
+    def get_downloaded_file(self):
+        """Get the latest file in the downloads folder."""
 
+        self.print_message('getting downloaded file')
+
+        return downloads.get_latest_download(self.download_dir)
 
 
 

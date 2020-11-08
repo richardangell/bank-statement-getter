@@ -18,6 +18,7 @@ def run_exporter(start_date, end_date):
 
     exporter = export.BankStatementGetter(start_date, end_date)
     exporter.run()
+    print(exporter.downloaded_file)
     
     
 def check_date_format(string):
