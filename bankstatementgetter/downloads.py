@@ -1,3 +1,4 @@
+import pandas as pd
 from pathlib import Path
 
 
@@ -23,4 +24,36 @@ def rename_download_file(path, start_date, end_date):
     path.rename(new_name)
 
     return str(new_name)
+
+
+
+def load_statement(file):
+    """Load downloaded statement file in pandas DataFrame."""
+
+    df = pd.read_csv(file)
+
+    expected_cols = [
+        'Transaction Date',
+        'Transaction Type',
+        'Transaction Description',
+        'Debit Amount',
+        'Credit Amount',
+        'Balance'
+    ]
+
+    for col in expected_cols:
+
+        if not col in df.columns.values:
+
+            raise ValueError(f'column {col} not in {file}')
+
+    df = df[expected_cols]
+
+    # add column that will be manually filled later
+    df['Category'] = None
+
+    return df
+
+
+
 
