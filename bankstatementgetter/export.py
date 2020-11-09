@@ -43,9 +43,7 @@ class BankStatementGetter():
         )
 
         self.enter_memorable_characters()
-
         self.sleep(2)
-
         self.enter_passcode()
     
         # wait to get to next page - accounts
@@ -63,10 +61,10 @@ class BankStatementGetter():
         )
 
         self.download_statement()
-
         self.sign_out()
 
         self.downloaded_file = self.get_downloaded_file()
+        self.downloaded_file = self.rename_downloaded_file()
 
     def set_profile(self):
         """Set profile for webdriver to avoid download popup boxes for CSV files."""
@@ -275,5 +273,11 @@ class BankStatementGetter():
 
         return downloads.get_latest_download(self.download_dir)
 
+    def rename_downloaded_file(self):
+        """Rename the downloaded file."""
+
+        self.print_message('renaming downloaded file')
+
+        return downloads.rename_download_file(self.downloaded_file, self.start_date_range, self.end_date_range)
 
 
