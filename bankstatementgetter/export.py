@@ -45,7 +45,11 @@ class BankStatementGetter():
         self.enter_memorable_characters()
         self.sleep(2)
         self.enter_passcode()
-    
+
+        self.sleep(5)
+        self.check_for_trust_this_device_popup()
+        self.sleep(5)
+
         # wait to get to next page - accounts
         self.wait_for_xpath(
             xpath_str = '//*[@id="lnkAccFuncs_viewStatement_des-m-sat-xx-1"]',
@@ -206,6 +210,19 @@ class BankStatementGetter():
 
             # click on continue button
             self.driver.find_elements_by_class_name("base-button")[0].click()
+
+    def check_for_trust_this_device_popup(self):
+        """Check if the trust this device pop up? has come up."""
+
+        self.print_message('checking for trust this device pop up')
+
+        trust_this_device_popup = self.driver.find_elements_by_class_name("sca-over-text-retaila")
+
+        if len(trust_this_device_popup) > 0:
+
+            self.driver.find_elements_by_id("scayesspan")[0].click()
+            self.driver.find_elements_by_id("dcontinue")[0].click()
+            self.driver.find_elements_by_id("dclose")[0].click()
 
     def move_to_accounts(self):
         """Click on the view statement button for the first account"""
