@@ -273,6 +273,8 @@ class BankStatementGetter():
         # click the export button
         self.driver.find_element_by_xpath('//*[@id="exportStatementsButton"]').click()
 
+        self.sleep(5)
+
         # close the export window
         self.driver.find_element_by_xpath('//*[@id="modal-close"]').click()
 
