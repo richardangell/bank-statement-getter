@@ -9,25 +9,43 @@ import time
 import datetime
 from pathlib import Path
 
-import bankstatementgetter.downloads as downloads 
 import bankstatementgetter.cookies as cookies 
+from bankstatementgetter.downloads import DownloadsManager 
 
 
 
-class BankStatementGetter():
+class BankStatementExporter(DownloadsManager):
     """Class to manage downloading bank statements."""
 
-    def __init__(self, start_date, end_date, verbose = True):
+    def __init__(self, verbose = True):
+
+        DownloadsManager.__init__(self)
 
         self.verbose = verbose
         self.download_dir = str(Path.home() / "Downloads")
         self.profile = self.set_profile()
         self.login_page = 'https://www.halifax-online.co.uk/personal/logon/login.jsp'
         self.webdriver_executable_path = '/usr/local/bin/geckodriver'
-        self.start_date_range = start_date
-        self.end_date_range = end_date
+        self.end_date_range = datetime.datetime.now().strftime('%d/%m/%Y')
         
-    def run(self):
+    def export(self, start_date):
+        """Method to run all the steps to export statement for time start_date - runtime date.
+        
+        Returns
+        -------
+        None, however named of file downloaded is set to downloaded_file attribute. 
+
+        """
+
+        self.start_date_range = start_date
+
+        if not datetime.datetime.strptime(self.end_date_range, '%d/%m/%Y') >= datetime.datetime.strptime(self.start_date_range, '%d/%m/%Y'):
+
+            raise ValueError(f'end_date ({self.end_date_range}) not after start_date ({self.start_date_range})')
+        
+        if datetime.datetime.strptime(self.end_date_range, '%d/%m/%Y') > datetime.datetime.now():
+
+            raise ValueError(f'end_date ({self.end_date_range}) is in the future')
 
         self.print_message(f'running for date range {self.start_date_range} - {self.end_date_range}')
 
@@ -216,13 +234,16 @@ class BankStatementGetter():
 
         self.print_message('checking for trust this device pop up')
 
-        trust_this_device_popup = self.driver.find_elements_by_class_name("sca-over-text-retaila")
+        trust_this_device_popup = self.driver.find_elements_by_class_name("sca-over-text-retail")
 
         if len(trust_this_device_popup) > 0:
 
             self.driver.find_elements_by_id("scayesspan")[0].click()
+            self.sleep(0.5)
             self.driver.find_elements_by_id("dcontinue")[0].click()
+            self.sleep(0.5)
             self.driver.find_elements_by_id("dclose")[0].click()
+            self.sleep(0.5)
 
     def move_to_accounts(self):
         """Click on the view statement button for the first account"""
@@ -239,9 +260,13 @@ class BankStatementGetter():
         # click on the dropdown to export statements
         self.driver.find_element_by_xpath('//*[@id="top-bar-exports"]').click()
 
+        self.sleep(0.5)
+
         # click on the option to export to csv
         self.driver.find_element_by_xpath('//*[@aria-label="Export transactions (CSV, QIF). option 3 of 4"]').click()
         
+        self.sleep(0.5)
+
         # click on export date range
         self.driver.find_element_by_xpath('//*[@id="labelexportDateRangeRadio-1"]').click()
 
@@ -290,13 +315,13 @@ class BankStatementGetter():
 
         self.print_message('getting downloaded file')
 
-        return downloads.get_latest_download(self.download_dir)
+        return self.get_latest_download(self.download_dir)
 
     def rename_downloaded_file(self):
         """Rename the downloaded file."""
 
         self.print_message('renaming downloaded file')
 
-        return downloads.rename_download_file(self.downloaded_file, self.start_date_range, self.end_date_range)
+        return self.rename_download_file(self.downloaded_file, self.start_date_range, self.end_date_range)
 
 

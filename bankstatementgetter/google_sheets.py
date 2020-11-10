@@ -6,6 +6,7 @@ import gspread
 
 
 class GoogleSheetsManager():
+    """Class to contain all the functinality for interacting with google sheets."""
 
     def __init__(self):
 
@@ -25,10 +26,14 @@ class GoogleSheetsManager():
 
         df = pd.DataFrame(self.worksheet.get_all_records())
 
+        df = df.fillna('')
+
         return df
 
     def upload_to_google_sheet(self, df):
         """Upload pandas DataFrame to google sheet."""
+
+        df = df.fillna('')
 
         # rename the original worksheet
         self.worksheet.update_title('statement_old')

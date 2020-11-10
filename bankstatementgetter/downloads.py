@@ -3,57 +3,83 @@ from pathlib import Path
 
 
 
-def get_latest_download(path):
-    """Function to get the latest file in a directory."""
+class DownloadsManager():
+    """Class to manage all the actions related to downloaded files."""
 
-    path = Path(path)
-    files = path.glob('*')
-    return max(files, key=lambda x: x.stat().st_ctime)
+    def __init__(self):
 
+        self.expected_statement_cols = [
+            'Transaction Date',
+            'Transaction Type',
+            'Transaction Description',
+            'Debit Amount',
+            'Credit Amount',
+            'Balance'
+        ]
 
-def rename_download_file(path, start_date, end_date):
-    """Function to rename file."""
+    def get_latest_download(self, path):
+        """Function to get the latest file in a directory."""
 
-    path = Path(path)
+        path = Path(path)
+        files = path.glob('*')
+        return max(files, key=lambda x: x.stat().st_ctime)
 
-    start_date = start_date.replace('/', '')
-    end_date = end_date.replace('/', '')
+    def rename_download_file(self, path, start_date, end_date):
+        """Function to rename file."""
 
-    new_name = path.parents[0] / f"statement-download_{start_date}-{end_date}.csv"
+        path = Path(path)
 
-    path.rename(new_name)
+        start_date = start_date.replace('/', '')
+        end_date = end_date.replace('/', '')
 
-    return str(new_name)
+        new_name = path.parents[0] / f"statement-download_{start_date}-{end_date}.csv"
 
+        path.rename(new_name)
 
+        return str(new_name)
 
-def load_statement(file):
-    """Load downloaded statement file in pandas DataFrame."""
+    def load_statement(self, file):
+        """Load downloaded statement file in pandas DataFrame."""
 
-    df = pd.read_csv(file)
+        df = pd.read_csv(file)
 
-    expected_cols = [
-        'Transaction Date',
-        'Transaction Type',
-        'Transaction Description',
-        'Debit Amount',
-        'Credit Amount',
-        'Balance'
-    ]
+        for col in self.expected_statement_cols:
 
-    for col in expected_cols:
+            if not col in df.columns.values:
 
-        if not col in df.columns.values:
+                raise ValueError(f'column {col} not in {file}')
 
-            raise ValueError(f'column {col} not in {file}')
+        df = df[self.expected_statement_cols]
 
-    df = df[expected_cols]
+        # add column that will be manually filled later
+        df['Category'] = None
 
-    # add column that will be manually filled later
-    df['Category'] = None
+        return df
 
-    return df
+    def get_max_date_from_statement(self, df):
+        """Function to get the maximum date from a statement."""
 
+        if not 'Transaction Date' in df.columns.values:
 
+            raise ValueError('''expecting 'Transaction Date' to be in df columns''')
 
+        max_date_in_file = pd.to_datetime(df['Transaction Date'], dayfirst = True).max().strftime('%d/%m/%Y')
+
+        return max_date_in_file
+    
+    def update_statement(self, df1, df2):
+        """Function to append 2 statement files and exclude any duplicated transactions.
+        
+        df2 contains last transactions and df1 is appended onto df2.
+        """
+
+        if df2.duplicated(subset = self.expected_statement_cols).sum() > 0:
+
+            raise ValueError('duplicate transactions in df2')
+
+        df_appended = df2.append(df1)
+
+        df_appended = df_appended.loc[~df_appended.duplicated(subset = self.expected_statement_cols)]
+
+        return df_appended
 

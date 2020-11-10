@@ -1,60 +1,44 @@
-import argparse
-from datetime import datetime
-
-import bankstatementgetter.export as export
+from bankstatementgetter.export import BankStatementExporter
+from bankstatementgetter.google_sheets import GoogleSheetsManager
 
 
 
-def run_exporter(start_date, end_date):
-    """Function to run bank statement getter all the way through."""
-    
-    if not datetime.strptime(end_date, '%d/%m/%Y') > datetime.strptime(start_date, '%d/%m/%Y'):
+class ExporterAndUploader(BankStatementExporter, GoogleSheetsManager):
+    """Class combining the exporting and google sheets functionality to run entire process."""
 
-        raise ValueError(f'end_date ({end_date}) not after start_date ({start_date})')
-    
-    if datetime.strptime(end_date, '%d/%m/%Y') > datetime.now():
+    def __init__(self):
 
-        raise ValueError(f'end_date ({end_date}) is in the future')
+        BankStatementExporter.__init__(self)
+        GoogleSheetsManager.__init__(self)
 
-    exporter = export.BankStatementGetter(start_date, end_date)
-    exporter.run()
-    print(exporter.downloaded_file)
-    
-    
-def check_date_format(string):
-    """Function to check the date formatting of input args."""
+    def run(self):
+        """Method to go through the whole process of exporting statement and uploading to 
+        google sheets.
+        """
+        
+        # download the current google sheet
+        google_sheets_statement = self.download_google_sheet()
 
-    try:
+        # get the max date in the current statement
+        current_max_date = self.get_max_date_from_statement(google_sheets_statement)
 
-        return datetime.strptime(string, '%d/%m/%Y').strftime('%d/%m/%Y')
+        # export bank statement with start_date = current maximum in the statement
+        self.export(start_date = current_max_date)
 
-    except Exception as err:
+        # read in exported statement
+        downloaded_statement = self.load_statement(self.downloaded_file)
 
-        raise argparse.ArgumentTypeError(f'{string} not in the correct dd/mm/yyyy format - {err}')
+        # appned the new downloaded statement to current on from google drive
+        appended_statements = self.update_statement(google_sheets_statement, downloaded_statement)
+
+        # upload to google sheets
+        self.upload_to_google_sheet(appended_statements)
 
 
 
 if __name__ == '__main__':
     
-    parser = argparse.ArgumentParser(description='Date range to export')
+    exporter = ExporterAndUploader()  
+    exporter.run()
 
-    parser.add_argument(
-        '-s',
-        '--start_date',
-        type=check_date_format,
-        required=True,
-        help='start of the date range to export (dd/mm/yyyy)'
-    )
-
-    parser.add_argument(
-        '-e',
-        '--end_date',
-        type=check_date_format,
-        required=True,
-        help='end of the date range to export (dd/mm/yyyy)'
-    )
-
-    args = parser.parse_args()
-
-    run_exporter(start_date = args.start_date, end_date = args.end_date)
     
